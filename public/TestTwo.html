@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style type="text/css">
+    html { height: 100%; }
+    body { height: 100%; margin: 0; background: #111; text-align: center; }
+    #remoteVideo { height: 70%; margin-top: 5%; background: #000; }
+    #localAudio { width: 20%; position: absolute; right: 1.1em; bottom: 1em; border: 1px solid #333; background: #000; }
+    #callButton { position: relative; font-size: 2em; bottom: 5%; border-radius: 1em; height: 20px; width: 20px;}
+    #messageBox { width: 80%; margin: 10px auto; height: 100px; }
+    #sendButton { display: block; margin: 10px auto; }
+    #incomingMessages { width: 80%; margin: 10px auto; height: 100px; border: 1px solid #333; background: #000; color: #fff; }
+  </style>
+</head>
+<script src="/socket.io/socket.io.js"></script>
+
+<audio id="localAudio" autoplay muted></audio>
+<audio id="remoteVideo" autoplay></audio>
+<button id="callButton" onclick="createOffer()">✆</button>
+<!-- <textarea id="messageBox" disabled></textarea>
+<button id="sendButton" disabled>Send</button> -->
+<pre id="incomingMessages"></pre>
+
+<script>
+const constraints = {
+    audio: true
+};
+
+navigator.mediaDevices.getUserMedia(constraints)
+    .then(stream => {
+        console.log('Got MediaStream:', stream);
+        document.getElementById("localAudio").srcObject = stream;
+        localStream = stream;
+    })
+    .catch(error => {
+        console.error('Error accessing media devices.', error);
+    });
+
+// Set up an asynchronous communication channel that will be
+// used during the peer connection setup
+const signalingChannel = io.connect('', {port: 4000});
+
+signalingChannel.on('message', message => {
+    // New message from remote client received
+    console.log('Message received:', message);
+    handleSignalingMessage(message);
+});
+
+// Send an asynchronous message to the remote client
+function sendMessage(message) {
+    signalingChannel.emit('message', message);
+}
+
+let localStream;
+let peerConnection;
+
+async function createOffer() {
+    const configuration = {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}]};
+    peerConnection = new RTCPeerConnection(configuration);
+
+    localStream.getTracks().forEach(track => {
+        peerConnection.addTrack(track, localStream);
+    });
+
+    peerConnection.onicecandidate = event => {
+        if (event.candidate) {
+            sendMessage({'new-ice-candidate': event.candidate});
+        }
+    };
+
+    peerConnection.ontrack = event => {
+        document.getElementById("remoteVideo").srcObject = event.streams[0];
+    };
+
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+    sendMessage({'offer': offer});
+}
+
+async function handleSignalingMessage(message) {
+    if (message.offer) {
+        const configuration = {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}]};
+        peerConnection = new RTCPeerConnection(configuration);
+
+        localStream.getTracks().forEach(track => {
+            peerConnection.addTrack(track, localStream);
+        });
+
+        peerConnection.onicecandidate = event => {
+            if (event.candidate) {
+                sendMessage({'new-ice-candidate': event.candidate});
+            }
+        };
+
+        peerConnection.ontrack = event => {
+            document.getElementById("remoteVideo").srcObject = event.streams[0];
+        };
+
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(message.offer));
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+        sendMessage({'answer': answer});
+    } else if (message.answer) {
+        await peerConnection.setRemoteDescription(new RTCSessionDescription(message.answer));
+    } else if (message.iceCandidate) {
+        try {
+            await peerConnection.addIceCandidate(message.iceCandidate);
+        } catch (e) {
+            console.error('Error adding received ice candidate', e);
+        }
+    }
+}
+
+const messageBox = document.querySelector('#messageBox');
+// const sendButton = document.querySelector('#sendButton');
+const incomingMessages = document.querySelector('#incomingMessages');
+
+// let dataChannel;
+
+// peerConnection.ondatachannel = event => {
+//     dataChannel = event.channel;
+//     dataChannel.onmessage = event => {
+//         incomingMessages.textContent += event.data + '\n';
+//     };
+//     dataChannel.onopen = () => {
+//         messageBox.disabled = false;
+//         messageBox.focus();
+//         sendButton.disabled = false;
+//     };
+//     dataChannel.onclose = () => {
+//         messageBox.disabled = true;
+//         sendButton.disabled = true;
+//     };
+// };
+
+// sendButton.addEventListener('click', event => {
+//     const message = messageBox.value;
+//     dataChannel.send(message);
+//     messageBox.value = '';
+// });
+</script>
+</html>

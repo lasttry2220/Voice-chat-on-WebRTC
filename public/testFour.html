@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC Voice Chat</title>
+</head>
+<body>
+    <h1>WebRTC Voice Chat</h1>
+    <button id="startButton">Start Call</button>
+    <button id="hangupButton">Hang Up</button>
+    <audio id="localAudio" autoplay></audio>
+    <audio id="remoteAudio" autoplay></audio>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const startButton = document.getElementById('startButton');
+        const hangupButton = document.getElementById('hangupButton');
+        const localAudio = document.getElementById('localAudio');
+        const remoteAudio = document.getElementById('remoteAudio');
+
+        let localStream;
+        let peerConnection;
+        const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+        const socket = io('https://26.162.249.164:4001');
+
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            socket.emit('join', 'room1');
+        });
+
+        socket.on('signal', (data) => {
+            handleSignalingMessage(data);
+        });
+
+        function handleSignalingMessage(message) {
+            if (message.sdp) {
+                peerConnection.setRemoteDescription(new RTCSessionDescription(message.sdp))
+                    .then(() => {
+                        if (message.sdp.type === 'offer') {
+                            peerConnection.createAnswer()
+                                .then(description => createAndSendAnswer(description));
+                        }
+                    });
+            } else if (message.ice) {
+                peerConnection.addIceCandidate(new RTCIceCandidate(message.ice));
+            }
+        }
+
+        function createAndSendAnswer(description) {
+            peerConnection.setLocalDescription(description)
+                .then(() => {
+                    socket.emit('signal', { sdp: peerConnection.localDescription });
+                });
+        }
+
+        startButton.onclick = async function () {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                console.error('WebRTC is not supported in this browser.');
+                return;
+            }
+
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                localAudio.srcObject = localStream;
+
+                peerConnection = new RTCPeerConnection(configuration);
+
+                localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+
+                peerConnection.onicecandidate = event => {
+                    if (event.candidate) {
+                        socket.emit('signal', { ice: event.candidate });
+                    }
+                };
+
+                peerConnection.ontrack = event => {
+                    if (event.streams && event.streams[0]) {
+                        remoteAudio.srcObject = event.streams[0];
+                    }
+                };
+
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                socket.emit('signal', { sdp: peerConnection.localDescription });
+            } catch (error) {
+                console.error('Error starting call:', error);
+            }
+        };
+
+        hangupButton.onclick = function () {
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            localAudio.srcObject = null;
+            remoteAudio.srcObject = null;
+        };
+    </script>
+</body>
+</html>
