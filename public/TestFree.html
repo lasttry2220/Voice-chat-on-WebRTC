@@ -4,11 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebRTC Voice Chat</title>
+    <link rel="stylesheet" href="styleBody.css">
 </head>
 <body>
-    <h1>WebRTC Voice Chat</h1>
-    <button id="startButton">Start Call</button>
-    <button id="hangupButton">Hang Up</button>
+    <div class="main">
+        <div class="main-overlay">
+            <div class="main-content">
+                <div class="header">
+                    <div class="header-wrap">
+                        <div class="wrap-main">
+                            <nav class="nav-main">
+                                <h1 class="nav-main-wrap">WebRTC Voice Chat</h1>
+                            </nav>
+                        </div>
+                    </div>
+                </div>
+                <div class="buttons-container">
+                    <button id="startButton">Start Call</button>
+                    <button id="hangupButton">Hang Up</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    
     <audio id="localAudio" autoplay></audio>
     <audio id="remoteAudio" autoplay></audio>
 
