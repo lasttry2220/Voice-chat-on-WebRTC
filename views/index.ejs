@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<%= csrfToken %>">
+    <title>WebRTC Voice Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+        }
+        .sidebar {
+            width: 250px;
+            background-color: #333;
+            color: #fff;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .main {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .user {
+            margin-bottom: 20px;
+        }
+        .user-image {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+        }
+        input[type="text"] {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: #fff;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        audio {
+            display: none;
+        }
+        .group-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        .group-list li {
+            cursor: pointer;
+            padding: 10px;
+            border-bottom: 1px solid #555;
+        }
+        .group-list li:hover {
+            background-color: #555;
+        }
+        .room-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        .room-list li {
+            cursor: pointer;
+            padding: 10px;
+            border-bottom: 1px solid #ccc;
+        }
+        .room-list li:hover {
+            background-color: #ddd;
+        }
+
+        .group-code {
+            font-size: 0.8em;
+            color: #666;
+        }
+
+            .owner-badge {
+            background: #4CAF50;
+            color: white;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <ul class="group-list" id="groupList"></ul>
+    </div>
+    <div class="main">
+        <div class="user">
+            <img class="user-image" src="image/user.svg">
+            <button id="logoutButton">Выйти</button>
+        </div>
+        <input type="text" id="groupNameInput" placeholder="Enter group name">
+        <button id="createGroupButton">Create Group</button>
+        <input type="text" id="groupCodeInput" placeholder="Введите ID группы">
+        <button id="joinGroupButton">Join Group</button>
+        <input type="text" id="roomCodeInput" placeholder="Enter room code">
+        <button id="createRoomButton">Create Room</button>
+        <button id="joinRoomButton">Join Room</button>
+        <button id="startCallButton">Start Call</button>
+        <button id="hangupButton">Hang Up</button>
+        <ul class="room-list" id="roomList"></ul>
+    </div>
+
+    <audio id="localAudio" autoplay muted></audio>
+    <audio id="remoteAudio" autoplay></audio>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+    <script>
+        // Функция для проверки аутентификации
+        document.addEventListener('DOMContentLoaded', () => {
+          fetch('/api/check-auth', {
+            credentials: 'include'
+          })
+          .then(response => {
+            if (!response.ok) window.location.href = '/login';
+          })
+          .catch(() => window.location.href = '/login');
+        });
+      </script>
+</body>
+</html>

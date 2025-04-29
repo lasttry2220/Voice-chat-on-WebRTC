@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<%= csrfToken %>">
     <title>Group Page</title>
     <style>
         body {
@@ -39,6 +40,18 @@
         .room-list li:hover {
             background-color: #ddd;
         }
+        .back-button {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: #fff;
+            cursor: pointer;
+        }
+        .back-button:hover {
+            background-color: #0056b3;
+        }
     </style>
 </head>
 <body>
@@ -46,6 +59,8 @@
         <ul class="room-list" id="roomList"></ul>
     </div>
     <div class="main">
+        <button id="logoutButton">Выйти</button>
+        <button class="back-button" id="backButton">Back to Main Page</button>
         <h1>Group Page</h1>
         <input type="text" id="roomNameInput" placeholder="Enter room name">
         <button id="createRoomButton">Create Room</button>

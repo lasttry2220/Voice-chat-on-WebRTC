@@ -21,9 +21,24 @@ const socket = io('https://192.168.1.2:3001');
 let currentGroup = '';
 let currentRoom = '';
 
-socket.on('connect', () => {
-    console.log('Connected to server');
-    getGroups();
+// Обработчик кнопки выхода
+document.getElementById('logoutButton').addEventListener('click', async () => {
+    try {
+      const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+      
+      const response = await fetch('/api/logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'CSRF-Token': csrfToken
+        },
+        credentials: 'include'
+      });
+  
+      if (response.ok) window.location.href = '/login';
+    } catch (error) {
+      console.error('Ошибка выхода:', error);
+    }
 });
 
 socket.on('groupCreated', (groupData) => {
@@ -43,12 +58,18 @@ socket.on('roomsList', (rooms) => {
     });
 });
 
+// Автоматически запрашиваем группы при загрузке страницы
+document.addEventListener('DOMContentLoaded', () => {
+    socket.emit('getGroups');
+});
+
+// Обновление списка групп
 socket.on('groupsList', (groups) => {
     groupList.innerHTML = '';
     groups.forEach(group => {
-        addGroupToList(group.groupCode, group.groupName);
+      addGroupToList(group.groupCode, group.groupName);
     });
-});
+  });
 
 socket.on('signal', (data) => {
     handleSignalingMessage(data);
@@ -75,6 +96,7 @@ function createAndSendAnswer(description) {
         });
 }
 
+// Обработка создания группы
 createGroupButton.addEventListener('click', () => {
     const groupName = groupNameInput.value;
     if (groupName) {
@@ -82,12 +104,18 @@ createGroupButton.addEventListener('click', () => {
     }
 });
 
+
 joinGroupButton.addEventListener('click', () => {
     const groupCode = groupCodeInput.value;
     if (groupCode) {
-        joinGroup(groupCode);
+      joinGroup(groupCode);
+      
+      // Добавляем обновление списка после присоединения
+      setTimeout(() => {
+        socket.emit('getGroups');
+      }, 500); // Небольшая задержка для сохранения в БД
     }
-});
+  });
 
 createRoomButton.addEventListener('click', () => {
     if (currentGroup) {
