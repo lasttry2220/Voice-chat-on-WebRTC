@@ -38,7 +38,7 @@ app.set('views', path.join(__dirname, 'views'));
 
 // Middleware
 app.use(cors({
-  origin: ['process.env.CLIENT_URL', 'http://localhost'],
+  origin: [process.env.CLIENT_URL, 'http://localhost'],
   credentials: true,
   exposedHeaders: ['_csrf']
 }));
@@ -61,18 +61,20 @@ app.get('*.(js|css|png|jpg|svg)', (req, res) => {
 
 // Настройка сессии
 const sessionMiddleware = session({
-  secret:  process.env.SESSION_SECRET || 'your-secret-key',
-  resave: false,
+  secret: process.env.SESSION_SECRET || 'strong-secret-key-here',
+  resave: true, // Измените на true
   saveUninitialized: false,
   store: MongoStore.create({
     mongoUrl: process.env.MONGODB_URI,
-    ttl: 14 * 24 * 60 * 60
+    ttl: 14 * 24 * 60 * 60,
+    autoRemove: 'native' // Добавьте эту опцию
   }),
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
     sameSite: 'lax',
-    maxAge: 1000 * 60 * 60 * 24 * 14
+    maxAge: 1000 * 60 * 60 * 24 * 14,
+    domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined // Критично для Render
   }
 });
 app.use(sessionMiddleware);
