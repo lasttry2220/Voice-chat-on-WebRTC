@@ -65,7 +65,7 @@ const sessionMiddleware = session({
   resave: false,
   saveUninitialized: false,
   store: MongoStore.create({
-    mongoUrl: 'mongodb://localhost:27017/webrtc',
+    mongoUrl: process.env.MONGODB_URI,
     ttl: 14 * 24 * 60 * 60
   }),
   cookie: {
