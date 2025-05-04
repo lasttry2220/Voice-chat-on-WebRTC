@@ -61,7 +61,7 @@ app.get('*.(js|css|png|jpg|svg)', (req, res) => {
 
 // Настройка сессии
 const sessionMiddleware = session({
-  secret: 'your-secret-key',
+  secret:  process.env.SESSION_SECRET || 'your-secret-key',
   resave: false,
   saveUninitialized: false,
   store: MongoStore.create({
@@ -154,6 +154,10 @@ app.get('/login', (req, res) => {
 
 app.post('/login', (req, res, next) => {
   passport.authenticate('local', (err, user, info) => {
+    console.log('Auth error:', err); // Логируем ошибки
+    console.log('User:', user); // Проверяем найденного пользователя
+    console.log('Info:', info); // Доп. информация
+
     if (err) return next(err);
     if (!user) {
       req.flash('error', info.message);
