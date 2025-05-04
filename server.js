@@ -39,12 +39,11 @@ app.set('views', path.join(__dirname, 'views'));
 // Middleware
 app.use(cors({
   origin: [
-    'https://entryci.onrender.com', 
+    'https://entryci.onrender.com',
     'http://localhost:3000'
   ],
   credentials: true,
-  exposedHeaders: ['_csrf', 'set-cookie'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token']
+  exposedHeaders: ['set-cookie', 'x-csrf-token']
 }));
 
 // Дополнительные заголовки
@@ -72,19 +71,21 @@ app.get('*.(js|css|png|jpg|svg)', (req, res) => {
 
 // Настройка сессии
 const sessionMiddleware = session({
-  secret: process.env.SESSION_SECRET || 'strong-secret-key',
+  secret: process.env.SESSION_SECRET || 'your-secret',
   resave: true,
   saveUninitialized: false,
   store: MongoStore.create({
     mongoUrl: process.env.MONGODB_URI,
-    ttl: 14 * 24 * 60 * 60
+    ttl: 14 * 24 * 60 * 60,
+    autoRemove: 'interval',
+    autoRemoveInterval: 10
   }),
   cookie: {
-    secure: true, // Обязательно для HTTPS
+    secure: true,
     httpOnly: true,
-    sameSite: 'none', // Критично для кросс-доменных запросов
-    maxAge: 1000 * 60 * 60 * 24 * 14,
-    domain: '.onrender.com' // Поддомен Render
+    sameSite: 'none',
+    maxAge: 14 * 24 * 60 * 60 * 1000,
+    domain: '.onrender.com'
   }
 });
 app.use(sessionMiddleware);
@@ -179,7 +180,7 @@ app.get('/login', (req, res) => {
 });
 
 app.post('/login', (req, res, next) => {
-  passport.authenticate('local', (err, user, info) => {
+  passport.authenticate('local', async (err, user, info) => {
     console.log('--- Auth Callback ---');
     console.log('Error:', err);
     console.log('User:', user);
@@ -188,16 +189,19 @@ app.post('/login', (req, res, next) => {
     console.log('Session:', req.session);
 
     if (err) return next(err);
+
     if (!user) {
-      req.flash('error', info?.message || 'Invalid credentials');
+      await new Promise(resolve => req.session.destroy(resolve));
+      res.clearCookie('connect.sid');
       return res.redirect('/login');
     }
 
-    req.logIn(user, (loginErr) => {
-      console.log('Login process:', loginErr || 'Success');
-      if (loginErr) return next(loginErr);
+    req.logIn(user, async (err) => {
+      if (err) return next(err);
       
-      console.log('Authenticated:', req.isAuthenticated());
+      // Фиксация сессии перед отправкой ответа
+      Promise(resolve => req.session.save(resolve));
+      
       return res.redirect('/dashboard');
     });
   })(req, res, next);
@@ -292,10 +296,10 @@ app.get('/api/groups/:id', async (req, res) => {
 
 // Защищенные маршруты
 app.use((req, res, next) => {
-  console.log('Session Status:', {
-    id: req.sessionID,
+  console.log('Session debug:', {
+    sessionId: req.sessionID,
     authenticated: req.isAuthenticated(),
-    user: req.user
+    cookies: req.cookies
   });
   next();
 });
