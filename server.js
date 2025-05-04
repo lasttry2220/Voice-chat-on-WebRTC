@@ -38,7 +38,7 @@ app.set('views', path.join(__dirname, 'views'));
 
 // Middleware
 app.use(cors({
-  origin: ['https://192.168.1.20', 'http://localhost'],
+  origin: ['process.env.CLIENT_URL', 'http://localhost'],
   credentials: true,
   exposedHeaders: ['_csrf']
 }));
@@ -256,15 +256,32 @@ app.get('/api/groups/:id', async (req, res) => {
 // Защищенные маршруты
 
 // WebSocket
-const httpServer = http.createServer(app);
-const httpsServer = https.createServer({
-  key: fs.readFileSync(path.join(__dirname, 'certs', 'private.key')),
-  cert: fs.readFileSync(path.join(__dirname, 'certs', 'certificate.crt'))
-}, app);
+// const httpServer = http.createServer(app);
+// const httpsServer = https.createServer({
+//   key: fs.readFileSync(path.join(__dirname, 'certs', 'private.key')),
+//   cert: fs.readFileSync(path.join(__dirname, 'certs', 'certificate.crt'))
+// }, app);
 
-const io = socketIo(httpsServer, {
+// const io = socketIo(httpsServer, {
+//   cors: {
+//     origin: ['https://192.168.1.20', 'http://localhost'],
+//     credentials: true
+//   }
+// });
+
+const server = process.env.NODE_ENV === 'production' 
+  ? http.createServer(app)  // На Render HTTPS обрабатывается автоматически
+  : https.createServer({
+      key: fs.readFileSync(path.join(__dirname, 'certs', 'private.key')),
+      cert: fs.readFileSync(path.join(__dirname, 'certs', 'certificate.crt'))
+    }, app);
+
+const io = socketIo(server, {
   cors: {
-    origin: ['https://192.168.1.20', 'http://localhost'],
+    origin: [
+      process.env.CLIENT_URL || 'http://localhost:3000',
+      'https://your-app.onrender.com' // Ваш URL на Render
+    ],
     credentials: true
   }
 });
@@ -291,7 +308,7 @@ io.use((socket, next) => {
     }
   });
 // Подключение к MongoDB
-mongoose.connect('mongodb://localhost:27017/webrtc')
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/webrtc')
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB error:', err));
 
@@ -536,11 +553,8 @@ io.on('connection', (socket) => {
 const HTTP_PORT = process.env.HTTP_PORT || 3000;
 const HTTPS_PORT = process.env.HTTPS_PORT || 3001;
 
-httpServer.listen(HTTP_PORT, () => 
-  console.log(`HTTP сервер запущен на порту ${HTTP_PORT}`));
-
-httpsServer.listen(HTTPS_PORT, () => 
-  console.log(`HTTPS сервер запущен на порту ${HTTPS_PORT}`));
+const PORT = process.env.PORT || 3000; // Render сам назначает порт
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 // Обработка ошибок
 app.use((err, req, res, next) => {

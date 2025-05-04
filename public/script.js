@@ -76,7 +76,10 @@ let isCallActive = false;
 
 const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-const socket = io('https://192.168.1.20:3001');
+// const socket = io('https://192.168.1.20:3001');
+const socket = io('https://entryci.onrender.com', {
+    withCredentials: true
+  });
 
 let currentSelectedGroupId = null;
 let currentGroup = '';
