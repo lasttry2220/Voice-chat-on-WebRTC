@@ -1,25 +1,102 @@
 const createGroupButton = document.getElementById('createGroupButton');
-const joinGroupButton = document.getElementById('joinGroupButton');
-const createRoomButton = document.getElementById('createRoomButton');
-const joinRoomButton = document.getElementById('joinRoomButton');
-const startCallButton = document.getElementById('startCallButton');
+const createRoomBtn = document.getElementById('createRoomBtn');
 const hangupButton = document.getElementById('hangupButton');
 const groupNameInput = document.getElementById('groupNameInput');
 const groupCodeInput = document.getElementById('groupCodeInput');
-const roomCodeInput = document.getElementById('roomCodeInput');
 const localAudio = document.getElementById('localAudio');
 const remoteAudio = document.getElementById('remoteAudio');
 const groupList = document.getElementById('groupList');
 const roomList = document.getElementById('roomList');
+const createGroupBtn = document.getElementById('createGroupBtn');
+
+// Добавьте новый функционал
+const modal = document.querySelector('.create-server-modal');
+const serverNameInput = document.getElementById('serverNameInput');
+const createButton = document.querySelector('.create-button');
+const iconUpload = document.getElementById('iconUpload');
+const iconPreview = document.querySelector('.icon-preview');
+const iconPreviewText = document.getElementById('iconPreviewText');
+
+if (!modal) console.error('Modal element not found!');
+if (!createGroupBtn) console.error('Create group button not found!');
+if (!serverNameInput) console.error('Server name input not found!');
+
+// Обработчики закрытия модального окна
+document.querySelector('.modal-overlay').addEventListener('click', closeModal);
+document.querySelector('.back-button').addEventListener('click', closeModal);
+
+// Валидация названия сервера
+serverNameInput.addEventListener('input', (e) => {
+    const name = e.target.value.trim();
+    document.getElementById('charCount').textContent = name.length;
+    createButton.disabled = name.length < 2 || name.length > 100;
+});
+
+// Загрузка иконки
+document.getElementById('uploadButton').addEventListener('click', () => {
+    iconUpload.click();
+});
+
+iconUpload.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            iconPreview.style.backgroundImage = `url(${event.target.result})`;
+            iconPreviewText.style.display = 'none';
+        }
+        reader.readAsDataURL(file);
+    }
+});
+
+// Создание сервера
+createButton.addEventListener('click', () => {
+    const serverName = serverNameInput.value.trim();
+    if (serverName.length < 2) return;
+    
+    // Отправка данных на сервер
+    socket.emit('createGroup', serverName);
+    closeModal();
+});
+
+function closeModal() {
+    modal.classList.add('hidden');
+    // Сброс формы
+    serverNameInput.value = '';
+    iconPreview.style.backgroundImage = '';
+    iconPreviewText.style.display = 'block';
+    document.getElementById('charCount').textContent = '0';
+    createButton.disabled = true;
+}
+
 
 let localStream;
 let peerConnection;
+let isCallActive = false;
+
 const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-const socket = io('https://192.168.1.2:3001');
+const socket = io('https://192.168.1.20:3001');
 
+let currentSelectedGroupId = null;
 let currentGroup = '';
 let currentRoom = '';
+
+
+if (createGroupBtn) {
+    // Новый обработчик для открытия модального окна
+    createGroupBtn.addEventListener('click', () => {
+        document.querySelector('.create-server-modal').classList.remove('hidden');
+    });
+} else {
+    console.error('Кнопка создания группы не найдена! Проверьте HTML-разметку');
+}
+
+
+function isValidObjectId(id) {
+    const objectIdPattern = /^[0-9a-fA-F]{24}$/;
+    return objectIdPattern.test(id);
+}
 
 // Обработчик кнопки выхода
 document.getElementById('logoutButton').addEventListener('click', async () => {
@@ -41,35 +118,61 @@ document.getElementById('logoutButton').addEventListener('click', async () => {
     }
 });
 
-socket.on('groupCreated', (groupData) => {
-    currentGroup = groupData.groupCode;
-    console.log(`Group created with code: ${groupData.groupCode} and name: ${groupData.groupName}`);
-    addGroupToList(groupData.groupCode, groupData.groupName);
+socket.on('groupCreated', (response) => {
+    if (response.success) {
+        currentGroup = response.group._id;
+        console.log(`Группа создана: ${response.group.name}`);
+        addGroupToList(response.group._id, response.group.name);
+    } else {
+        alert('Ошибка создания группы: ' + (response.error || 'Неизвестная ошибка'));
+    }
 });
 
 socket.on('roomCreated', (roomData) => {
-    addRoomToList(roomData.roomCode, roomData.roomName);
+    console.log('New room created:', roomData); // Добавьте лог
+    addRoomToList(roomData.id, roomData.name);
 });
 
-socket.on('roomsList', (rooms) => {
-    roomList.innerHTML = '';
-    rooms.forEach(room => {
-        addRoomToList(room.roomCode, room.roomName);
-    });
-});
+
 
 // Автоматически запрашиваем группы при загрузке страницы
 document.addEventListener('DOMContentLoaded', () => {
     socket.emit('getGroups');
 });
 
+// функция выбора группы
+function selectGroup(groupId) {
+    if (!isValidObjectId(groupId)) {
+        alert('Неверный формат ID группы');
+        return;
+    }
+    
+    currentSelectedGroupId = groupId;
+    currentGroup = groupId;
+    const roomsPanel = document.getElementById('roomsPanel');
+    if (roomsPanel) roomsPanel.classList.remove('hidden');
+    
+    socket.emit('getRooms', groupId);
+    socket.emit('joinGroup', groupId);
+}
+
 // Обновление списка групп
 socket.on('groupsList', (groups) => {
+    const groupList = document.getElementById('groupList');
     groupList.innerHTML = '';
+    
     groups.forEach(group => {
-      addGroupToList(group.groupCode, group.groupName);
+        const li = document.createElement('li');
+        li.innerHTML = `
+            <div class="group-item">
+                <span>${group.groupName}</span>
+                <small>${group.groupCode}</small>
+            </div>
+        `;
+        li.addEventListener('click', () => selectGroup(group.groupCode));
+        groupList.appendChild(li);
     });
-  });
+});
 
 socket.on('signal', (data) => {
     handleSignalingMessage(data);
@@ -96,91 +199,83 @@ function createAndSendAnswer(description) {
         });
 }
 
-// Обработка создания группы
-createGroupButton.addEventListener('click', () => {
-    const groupName = groupNameInput.value;
-    if (groupName) {
-        socket.emit('createGroup', groupName);
+
+// обработчик создания комнаты
+createRoomBtn.addEventListener('click', () => {
+    const roomNameInput = document.getElementById('newRoomName');
+    const roomName = roomNameInput.value.trim();
+    
+    if (!currentGroup || !roomName) {
+        alert('Укажите название комнаты и выберите группу!');
+        return;
     }
+    
+    socket.emit('createRoom', { 
+        groupId: currentGroup, 
+        roomName: roomName
+    });
+    
+    // Очистка поля ввода сразу после отправки
+    roomNameInput.value = '';
 });
 
-
-joinGroupButton.addEventListener('click', () => {
-    const groupCode = groupCodeInput.value;
-    if (groupCode) {
-      joinGroup(groupCode);
-      
-      // Добавляем обновление списка после присоединения
-      setTimeout(() => {
-        socket.emit('getGroups');
-      }, 500); // Небольшая задержка для сохранения в БД
-    }
-  });
-
-createRoomButton.addEventListener('click', () => {
-    if (currentGroup) {
-        socket.emit('createRoom', currentGroup);
-    }
+// очищать только после успешного создания
+socket.on('roomsList', () => {
+    document.getElementById('newRoomName').value = '';
 });
 
-joinRoomButton.addEventListener('click', () => {
-    const roomCode = roomCodeInput.value;
-    if (roomCode && currentGroup) {
-        socket.emit('joinRoom', { roomCode, groupCode: currentGroup });
-    }
-});
-
-startCallButton.addEventListener('click', async () => {
+//логика звонка
+socket.on('startCall', async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         console.error('WebRTC is not supported in this browser.');
         return;
     }
-
     try {
-        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        localAudio.srcObject = localStream;
+        console.log('Инициализация звонка...');
+        
+        if (!localStream) {
+            localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            localAudio.srcObject = localStream;
+        }
 
-        peerConnection = new RTCPeerConnection(configuration);
+        // Создаем новое подключение если его нет
+        if (!peerConnection) {
+            peerConnection = new RTCPeerConnection(configuration);
+            
+            localStream.getTracks().forEach(track => 
+                peerConnection.addTrack(track, localStream)
+            );
 
-        localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+            peerConnection.onicecandidate = event => {
+                if (event.candidate) {
+                    socket.emit('signal', { ice: event.candidate, room: currentRoom });
+                }
+            };
 
-        peerConnection.onicecandidate = event => {
-            if (event.candidate) {
-                socket.emit('signal', { ice: event.candidate, room: currentRoom });
-            }
-        };
+            peerConnection.ontrack = event => {
+                if (event.streams && event.streams[0]) {
+                    remoteAudio.srcObject = event.streams[0];
+                }
+            };
+        }
 
-        peerConnection.ontrack = event => {
-            if (event.streams && event.streams[0]) {
-                remoteAudio.srcObject = event.streams[0];
-            }
-        };
-
+        // Создаем и отправляем offer
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
-        socket.emit('signal', { sdp: peerConnection.localDescription, room: currentRoom });
+        socket.emit('signal', { 
+            sdp: peerConnection.localDescription, 
+            room: currentRoom 
+        });
     } catch (error) {
         console.error('Error starting call:', error);
     }
 });
 
-hangupButton.addEventListener('click', () => {
-    if (peerConnection) {
-        peerConnection.close();
-        peerConnection = null;
-    }
-    if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-        localStream = null;
-    }
-    localAudio.srcObject = null;
-    remoteAudio.srcObject = null;
-});
 
 function joinGroup(groupCode) {
     currentGroup = groupCode;
     socket.emit('joinGroup', groupCode);
-    getRooms(groupCode);
+    selectGroup(groupCode);
 }
 
 function getRooms(groupCode) {
@@ -189,19 +284,77 @@ function getRooms(groupCode) {
 
 function addGroupToList(groupCode, groupName) {
     const li = document.createElement('li');
-    li.textContent = `${groupName} (${groupCode})`;
-    li.addEventListener('click', () => {
-        joinGroup(groupCode);
-    });
+    li.className = 'group-item';
+    li.dataset.groupId = groupCode;
+    li.dataset.tooltip = groupName;
+    li.innerHTML = `
+        <span>${groupName[0].toUpperCase()}</span>
+    `;
+    
+    // Если есть иконка
+    const icon = document.querySelector('.icon-preview').style.backgroundImage;
+    if (icon) {
+        li.style.backgroundImage = icon;
+        li.style.backgroundSize = 'cover';
+        li.querySelector('span').style.display = 'none';
+    }
+    
+    li.addEventListener('click', () => selectGroup(groupCode));
     groupList.appendChild(li);
 }
 
-function addRoomToList(roomCode, roomName) {
-    const li = document.createElement('li');
-    li.textContent = roomName;
-    li.addEventListener('click', () => {
-        joinRoom(roomCode);
+// Делегирование событий для списка комнат
+document.getElementById('roomList').addEventListener('click', (e) => {
+    if (e.target.closest('.join-room-btn')) {
+        const roomId = e.target.closest('li').dataset.roomId;
+        joinRoom(roomId);
+    }
+});
+socket.on('roomsList', (rooms) => {
+    const roomList = document.getElementById('roomList');
+    roomList.innerHTML = '';
+    
+    rooms.forEach(room => {
+        const li = document.createElement('li');
+        li.dataset.roomId = room.id;
+        li.className = 'room-item';
+        li.innerHTML = `
+            <div class="room-content">
+                <span>${room.name}</span>
+            </div>
+        `;
+        
+        // Добавляем обработчик клика на весь элемент
+        li.addEventListener('click', () => {
+            if (!currentSelectedGroupId) {
+                alert('Сначала выберите группу!');
+                return;
+            }
+            joinRoom(room.id);
+        });
+        
+        roomList.appendChild(li);
     });
+});
+
+function addRoomToList(roomId, roomName) {
+    const li = document.createElement('li');
+    li.dataset.roomId = roomId;
+    li.className = 'room-item';
+    li.innerHTML = `
+        <div class="room-content">
+            <span>${roomName}</span>
+        </div>
+    `;
+    
+    li.addEventListener('click', () => {
+        if (!currentSelectedGroupId) {
+            alert('Сначала выберите группу!');
+            return;
+        }
+        joinRoom(roomId);
+    });
+    
     roomList.appendChild(li);
 }
 
@@ -209,13 +362,28 @@ function getGroups() {
     socket.emit('getGroups');
 }
 
-function joinRoom(roomCode) {
-    currentRoom = roomCode;
-    socket.emit('joinRoom', { roomCode, groupCode: currentGroup });
-}
-function joinGroup(groupCode) {
-    currentGroup = groupCode;
-    socket.emit('joinGroup', groupCode);
-    getRooms(groupCode);
-    window.location.href = `group.html?groupCode=${groupCode}`;
+function joinRoom(roomId) {
+    if (!currentSelectedGroupId) {
+        alert('Сначала выберите группу!');
+        return;
+    }
+
+    if (isCallActive) {
+        alert('Завершите текущий звонок перед присоединением к новой комнате');
+        return;
+    }
+
+    socket.emit('joinRoom', { 
+        roomCode: roomId,
+        groupCode: currentSelectedGroupId 
+    }, (response) => {
+        if (response.error) {
+            console.error('Ошибка присоединения:', response.error);
+            alert(response.error);
+        } else {
+            currentRoom = roomId;
+            console.log('Успешно присоединились к комнате:', roomId);
+            
+        }
+    });
 }

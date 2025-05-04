@@ -2,126 +2,478 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<%= csrfToken %>">
     <title>WebRTC Voice Chat</title>
     <style>
+        :root {
+            --discord-primary: #36393f;
+            --discord-secondary: #2f3136;
+            --discord-tertiary: #202225;
+            --discord-accent: #5865f2;
+            --discord-text: #dcddde;
+            --discord-hover: #3b3d42;
+        }
+    
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
             margin: 0;
             padding: 0;
-            display: flex;
             height: 100vh;
+            font-family: 'Whitney', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background-color: var(--discord-primary);
+            color: var(--discord-text);
+            display: flex;
         }
-        .sidebar {
-            width: 250px;
-            background-color: #333;
-            color: #fff;
-            padding: 20px;
-            overflow-y: auto;
-        }
-        .main {
+    
+        .container {
+            display: flex;
             flex: 1;
-            padding: 20px;
+            height: 100%;
+        }
+    
+        /* Панель групп */
+        .groups-panel {
+            width: 72px;
+            background: var(--discord-tertiary);
             display: flex;
             flex-direction: column;
             align-items: center;
+            padding: 12px 0;
+            border-right: 1px solid #000;
         }
-        .user {
-            margin-bottom: 20px;
-        }
-        .user-image {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-        }
-        input[type="text"] {
-            width: calc(100% - 22px);
-            padding: 10px;
-            margin-bottom: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
-        button {
+    
+        .groups-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
             width: 100%;
-            padding: 10px;
-            margin-bottom: 10px;
-            border: none;
-            border-radius: 5px;
-            background-color: #007bff;
-            color: #fff;
+        }
+    
+        .group-item {
+            width: 48px;
+            height: 48px;
+            margin: 8px auto;
+            border-radius: 50%;
+            background: var(--discord-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
             cursor: pointer;
+            transition: border-radius .2s, background-color .2s;
         }
-        button:hover {
-            background-color: #0056b3;
+    
+        .group-item:hover {
+            border-radius: 30%;
+            background: var(--discord-accent);
         }
-        audio {
+    
+        .group-item span {
             display: none;
         }
-        .group-list {
-            list-style-type: none;
-            padding: 0;
+    
+        /* Панель комнат */
+        .rooms-panel {
+            width: 240px;
+            background: var(--discord-secondary);
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #000;
         }
-        .group-list li {
+    
+        .panel-header {
+            padding: 18px 16px;
+            box-shadow: 0 1px 0 rgba(0,0,0,.2);
+        }
+    
+        .panel-header h2 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #8e9297;
+        }
+    
+        .rooms-list {
+            padding: 8px 0;
+            flex: 1;
+            overflow-y: auto;
+        }
+    
+        .room-item {
+            padding: 8px 16px;
+            margin: 2px 8px;
+            border-radius: 4px;
             cursor: pointer;
-            padding: 10px;
-            border-bottom: 1px solid #555;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
         }
-        .group-list li:hover {
-            background-color: #555;
+    
+        .room-item:hover {
+            background: var(--discord-hover);
         }
-        .room-list {
-            list-style-type: none;
-            padding: 0;
+    
+        .room-item::before {
+            content: "#";
+            margin-right: 8px;
+            color: #8e9297;
         }
-        .room-list li {
-            cursor: pointer;
-            padding: 10px;
-            border-bottom: 1px solid #ccc;
+    
+        /* Основное содержимое */
+        .main-content {
+            flex: 1;
+            background: var(--discord-primary);
+            display: flex;
+            flex-direction: column;
+            position: relative;
         }
-        .room-list li:hover {
-            background-color: #ddd;
-        }
-
-        .group-code {
-            font-size: 0.8em;
-            color: #666;
-        }
-
-            .owner-badge {
-            background: #4CAF50;
+    
+        /* Кнопки и элементы управления */
+        button {
+            background: var(--discord-accent);
             color: white;
-            padding: 2px 5px;
-            border-radius: 3px;
-            font-size: 0.8em;
-            margin-left: 10px;
+            border: none;
+            border-radius: 4px;
+            padding: 10px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background .2s;
+        }
+    
+        button:hover {
+            background: #4752c4;
+        }
+    
+        #createGroupBtn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: #36393f;
+            color: #3ba55c;
+            font-size: 24px;
+            margin-top: 8px;
+        }
+    
+        #createGroupBtn:hover {
+            background: #3ba55c;
+            color: white;
+        }
+    
+        .room-controls {
+            margin-top: 16px;
+            display: flex;
+            gap: 8px;
+        }
+    
+        #newRoomName {
+            background: #202225;
+            border: 1px solid #040405;
+            color: var(--discord-text);
+            border-radius: 4px;
+            padding: 8px;
+            flex: 1;
+        }
+    
+        /* User controls */
+        .user-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+        }
+    
+        #logoutButton {
+            background: #ed4245;
+            padding: 8px 16px;
+        }
+    
+        #logoutButton:hover {
+            background: #c03939;
+        }
+    
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+    
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+    
+        ::-webkit-scrollbar-thumb {
+            background: #202225;
+            border-radius: 4px;
+        }
+    
+        .hidden {
+            display: none !important;
+        }
+        .group-item {
+            position: relative;
+        }
+
+        .group-item::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: calc(100% + 15px);
+            top: 50%;
+            transform: translateY(-50%);
+            background: #18191c;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            pointer-events: none;
+            box-shadow: 0 5px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+
+        .group-item:hover::after {
+            opacity: 1;
+            visibility: visible;
+            transition-delay: 0.5s;
+        }
+
+        .group-item::before {
+            content: "";
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            border: 5px solid transparent;
+            border-right-color: #18191c;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            z-index: 1001;
+        }
+
+        .group-item:hover::before {
+            opacity: 1;
+            visibility: visible;
+            transition-delay: 0.5s;
+        }
+
+        /* Модальное окно создания сервера */
+        .create-server-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+        }
+
+        .modal-content {
+            position: relative;
+            background: var(--discord-primary);
+            width: 440px;
+            border-radius: 8px;
+            padding: 32px;
+            z-index: 10001;
+            animation: modalSlideIn 0.3s ease-out;
+        }
+
+        @keyframes modalSlideIn {
+            from { transform: translateY(-20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h2 {
+            color: #fff;
+            margin-bottom: 8px;
+            font-size: 24px;
+        }
+
+        .modal-header p {
+            color: #b9bbbe;
+            font-size: 14px;
+        }
+
+        .server-icon-upload {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .icon-preview {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #36393f;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .icon-preview:hover::after {
+            content: "Сменить иконку";
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        #iconPreviewText {
+            font-size: 32px;
+            color: #fff;
+        }
+
+        .server-name-input {
+            margin-bottom: 24px;
+        }
+
+        .server-name-input label {
+            display: block;
+            margin-bottom: 8px;
+            color: #b9bbbe;
+            font-size: 14px;
+        }
+
+        #serverNameInput {
+            width: 100%;
+            padding: 10px;
+            background: #202225;
+            border: 1px solid #040405;
+            border-radius: 4px;
+            color: #fff;
+            font-size: 16px;
+        }
+
+        .char-counter {
+            text-align: right;
+            font-size: 12px;
+            color: #b9bbbe;
+            margin-top: 4px;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+
+        .modal-footer button {
+            padding: 12px 24px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .modal-footer .back-button {
+            background: none;
+            color: #fff;
+        }
+
+        .modal-footer .back-button:hover {
+            text-decoration: underline;
+        }
+
+        .modal-footer .create-button {
+            background: #5865f2;
+        }
+
+        .modal-footer .create-button:disabled {
+            background: #4a4d52;
+            cursor: not-allowed;
+            opacity: 0.7;
         }
     </style>
 </head>
 <body>
-    <div class="sidebar">
-        <ul class="group-list" id="groupList"></ul>
-    </div>
-    <div class="main">
-        <div class="user">
-            <img class="user-image" src="image/user.svg">
-            <button id="logoutButton">Выйти</button>
+    <div class="container">
+        <!-- Панель групп -->
+        <div class="groups-panel">
+            <ul class="groups-list" id="groupList"></ul>
+            <button id="createGroupBtn" title="Создать сервер">+</button>
         </div>
-        <input type="text" id="groupNameInput" placeholder="Enter group name">
-        <button id="createGroupButton">Create Group</button>
-        <input type="text" id="groupCodeInput" placeholder="Введите ID группы">
-        <button id="joinGroupButton">Join Group</button>
-        <input type="text" id="roomCodeInput" placeholder="Enter room code">
-        <button id="createRoomButton">Create Room</button>
-        <button id="joinRoomButton">Join Room</button>
-        <button id="startCallButton">Start Call</button>
-        <button id="hangupButton">Hang Up</button>
-        <ul class="room-list" id="roomList"></ul>
+
+        <!-- Панель комнат -->
+        <div class="rooms-panel" id="roomsPanel">
+            <div class="panel-header">
+                <h2>Голосовые каналы</h2>
+                <div class="room-controls">
+                    <input type="text" id="newRoomName" placeholder="Создать канал">
+                    <button id="createRoomBtn">Создать</button>
+                </div>
+            </div>
+            <ul class="rooms-list" id="roomList"></ul>
+        </div>
+
+        <!-- Основной контент -->
+        <div class="main-content">
+            <div class="user-controls">
+                <button id="logoutButton">Выйти</button>
+                <audio id="localAudio" autoplay muted></audio>
+                <audio id="remoteAudio" autoplay></audio>
+            </div>
+        </div>
     </div>
 
-    <audio id="localAudio" autoplay muted></audio>
-    <audio id="remoteAudio" autoplay></audio>
+    <!-- Модальное окно создания сервера -->
+    <div class="create-server-modal hidden">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Настройте свой сервер</h2>
+                <p>Дайте вашему серверу индивидуальность с названием и иконкой</p>
+            </div>
+            <div class="modal-body">
+                <div class="server-icon-upload">
+                    <div class="icon-preview">
+                        <span id="iconPreviewText">СФ</span>
+                        <input type="file" id="iconUpload" accept="image/*" hidden>
+                    </div>
+                    <button id="uploadButton">Загрузить</button>
+                </div>
+                <div class="server-name-input">
+                    <label for="serverNameInput">Название сервера</label>
+                    <input type="text" id="serverNameInput" maxlength="100">
+                    <div class="char-counter"><span id="charCount">0</span>/100</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="back-button">Назад</button>
+                <button class="create-button" disabled>Создать</button>
+            </div>
+        </div>
+    </div>
+
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>

@@ -38,14 +38,24 @@ app.set('views', path.join(__dirname, 'views'));
 
 // Middleware
 app.use(cors({
-  origin: ['https://192.168.1.2', 'http://localhost'],
+  origin: ['https://192.168.1.20', 'http://localhost'],
   credentials: true,
   exposedHeaders: ['_csrf']
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, path) => {
+    if (path.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    }
+  }
+}));
+
+app.get('*.(js|css|png|jpg|svg)', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', req.path));
+});
 
 
 
@@ -216,12 +226,12 @@ app.post('/api/logout', csrfProtection, (req, res) => {
 });
 
 // API маршруты
-app.get('/api/groups', async (req, res) => {
+app.get('/api/groups/:id/check', authenticate, async (req, res) => {
   try {
-    const groups = await Group.find({ owner: req.user._id }).populate('rooms');
-    res.json(groups);
-  } catch (err) {
-    res.status(500).json({ error: 'Ошибка загрузки групп' });
+      const group = await Group.findById(req.params.id);
+      res.json({ exists: !!group });
+  } catch (error) {
+      res.status(500).json({ error: 'Ошибка проверки группы' });
   }
 });
 
@@ -242,29 +252,8 @@ app.get('/api/groups/:id', async (req, res) => {
     res.status(500).json({ error: 'Ошибка загрузки группы' });
   }
 });
-  
-// Теперь можно использовать authenticate в маршрутах
-app.get('/api/groups', authenticate, async (req, res) => {
-  try {
-    const groups = await Group.find({ 
-      $or: [
-        { owner: req.user._id },
-        { participants: req.user._id }
-      ]
-    }).populate('rooms');
-    
-    res.json(groups);
-  } catch (err) {
-    res.status(500).json({ error: 'Ошибка загрузки групп' });
-  }
-});
 
 // Защищенные маршруты
-
-
-app.get('/group/:id', authenticate, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'group.html'));
-});
 
 // WebSocket
 const httpServer = http.createServer(app);
@@ -275,7 +264,7 @@ const httpsServer = https.createServer({
 
 const io = socketIo(httpsServer, {
   cors: {
-    origin: ['https://192.168.1.2', 'http://localhost'],
+    origin: ['https://192.168.1.20', 'http://localhost'],
     credentials: true
   }
 });
@@ -323,9 +312,12 @@ io.on('connection', (socket) => {
       await group.save();
       
       socket.emit('groupCreated', { 
-        groupCode: group._id, 
-        groupName: group.name 
-      });
+            success: true,
+            group: {
+                _id: group._id,
+                name: group.name
+            }
+        });
     } catch (error) {
       console.error('Error creating group:', error);
     }
@@ -342,6 +334,11 @@ io.on('connection', (socket) => {
         if (!group.participants.includes(user._id)) {
           group.participants.push(user._id);
           await group.save();
+
+          io.to(groupCode).emit('groupUpdated', {
+            type: 'participant_joined',
+            userId: user._id
+          });
         // Отправляем обновленный список всем участникам
           const updatedGroups = await Group.find({
             $or: [
@@ -364,149 +361,162 @@ io.on('connection', (socket) => {
   });
 
   // Обработчик получения списка групп
-socket.on('getGroups', async () => {
-  try {
-    const user = socket.request.user;
-    if (!user) return;
-    
-    const groups = await Group.find({
-      $or: [
-        { owner: user._id },
-        { participants: user._id }
-      ]
-    }).populate('owner', 'username');
-    
-    socket.emit('groupsList', groups.map(g => ({
-      groupCode: g._id,
-      groupName: g.name,
-      isOwner: g.owner._id.equals(user._id)
-    })));
-  } catch (error) {
-    console.error('Error getting groups:', error);
-  }
-});
-
-// Обработчик обновления списка групп
-socket.on('groupsList', (groups) => {
-  groupList.innerHTML = '';
-  groups.forEach(group => {
-    const li = document.createElement('li');
-    li.innerHTML = `
-      ${group.groupName} 
-      <span class="group-code">(${group.groupCode})</span>
-      ${group.isOwner ? '<span class="owner-badge">Owner</span>' : ''}
-    `;
-    li.addEventListener('click', () => joinGroup(group.groupCode));
-    groupList.appendChild(li);
-  });
-});
-
-  socket.on('createRoom', async (groupCode, roomName) => {
+  socket.on('getGroups', async () => {
     try {
-      // Добавляем валидацию
-      if (!mongoose.Types.ObjectId.isValid(groupCode)) {
-        return socket.emit('error', 'Invalid group ID');
-      }
-
-      const group = await Group.findById(groupCode);
-      const room = new Room({ name: roomName, group: groupCode });
-      await room.save();
+      const user = socket.request.user;
+      if (!user) return;
       
-      group.rooms.push(room._id);
-      await group.save();
+      const groups = await Group.find({
+        $or: [
+          { owner: user._id },
+          { participants: user._id }
+        ]
+      }).populate('owner', 'username');
       
-      // Отправляем обновленный список комнат ВСЕМ подключенным клиентам в группе
-      const updatedRooms = await Room.find({ group: groupCode });
-      io.to(groupCode).emit('roomsList', updatedRooms.map(r => ({
-        id: r._id,
-        name: r.name
+      socket.emit('groupsList', groups.map(g => ({
+        groupCode: g._id,
+        groupName: g.name,
+        isOwner: g.owner._id.equals(user._id)
       })));
     } catch (error) {
-      console.error('Error creating room:', error);
+      console.error('Error getting groups:', error);
     }
   });
 
-  function isValidObjectId(id) {
-    return mongoose.Types.ObjectId.isValid(id);
-}
+  // Обработчик обновления списка групп
+  socket.on('groupsList', (groups) => {
+    groupList.innerHTML = '';
+    groups.forEach(group => {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        ${group.groupName} 
+        <span class="group-code">(${group.groupCode})</span>
+        ${group.isOwner ? '<span class="owner-badge">Owner</span>' : ''}
+      `;
+      li.addEventListener('click', () => joinGroup(group.groupCode));
+      groupList.appendChild(li);
+    });
+  });
 
-  socket.on('joinRoom', async ({ roomCode, groupCode }) => {
+  socket.on('createRoom', async ({ groupId, roomName }) => {
     try {
-        console.log('[Server] JoinRoom attempt:', {
-            user: socket.request.user._id,
-            roomCode: roomCode,
-            groupCode: groupCode,
-            validRoom: isValidObjectId(roomCode),
-            validGroup: isValidObjectId(groupCode)
-        });
+        // 1. Валидация входных данных
+        if (!mongoose.Types.ObjectId.isValid(groupId)) {
+            return socket.emit('error', 'Неверный ID группы');
+        }
+        if (!roomName || roomName.trim().length < 2) {
+            return socket.emit('error', 'Название комнаты должно быть от 2 символов');
+        }
 
-        // Проверка валидности ID
-        if (!isValidObjectId(roomCode)) {
-            console.error('Invalid roomCode format');
-            return socket.emit('error', 'Invalid room ID format');
+        // 2. Поиск группы
+        const group = await Group.findById(groupId);
+        if (!group) {
+            return socket.emit('error', 'Группа не найдена');
+        }
+
+        // 3. Проверка прав пользователя
+        const user = socket.request.user;
+        if (group.owner.toString() !== user._id.toString()) {
+            return socket.emit('error', 'Недостаточно прав');
+        }
+
+        // 4. Создание комнаты
+        const room = new Room({ 
+            name: roomName.trim(),
+            group: groupId 
+        });
+        await room.save();
+
+        // 5. Обновление группы
+        group.rooms.push(room._id);
+        await group.save();
+
+        // 6. Отправка обновленного списка
+        const updatedRooms = await Room.find({ group: groupId }).lean();
+        io.to(groupId).emit('roomsList', updatedRooms.map(r => ({
+            id: r._id.toString(),
+            name: r.name
+        })));
+        
+    } catch (error) {
+        console.error('Error creating room:', error);
+        socket.emit('roomCreated', { error: 'Ошибка создания комнаты' });
+    }
+    socket.on('clearRoomInput', () => {
+      document.getElementById('newRoomName').value = '';
+    });
+  });
+  // Обновляем список комнат при изменениях
+  socket.on('roomCreated', (room) => {
+    if (room.group === currentGroup) {
+      const li = document.createElement('li');
+      li.textContent = room.name;
+      li.dataset.roomId = room._id;
+      li.addEventListener('click', () => joinRoom(room._id));
+      document.getElementById('roomList').appendChild(li);
+    }
+  });
+
+  socket.on('roomDeleted', (roomId) => {
+    const roomElement = document.querySelector(`[data-room-id="${roomId}"]`);
+    if (roomElement) roomElement.remove();
+  });
+
+  function isValidObjectId(id) {
+    return /^[0-9a-fA-F]{24}$/.test(id);
+  }
+  //   function isValidObjectId(id) {
+  //     return mongoose.Types.ObjectId.isValid(id);
+  // }
+
+  function initCall(roomId) {
+    io.to(roomId).emit('startCall');
+  }
+
+  socket.on('joinRoom', async ({ roomCode, groupCode }, callback) => {
+    try {
+        const user = socket.request.user;
+        
+        // Валидация входных данных
+        if (!isValidObjectId(groupCode) || !isValidObjectId(roomCode)) {
+            throw new Error('Неверный формат идентификаторов');
         }
 
         const group = await Group.findById(groupCode);
-        if (!group) {
-            console.error('Group not found');
-            return socket.emit('error', 'Group not found');
-        }
-
         const room = await Room.findById(roomCode);
-        if (!room) {
-            console.error('Room not found');
-            return socket.emit('error', 'Room not found');
-        }
 
-        // Проверка принадлежности комнаты к группе
-        if (room.group.toString() !== groupCode) {
-            console.error('Room does not belong to the group');
-            return socket.emit('error', 'Room-group mismatch');
-        }
-
-        // Проверка прав доступа
-        if (!group.participants.includes(socket.request.user._id)) {
-            console.error('User not in group participants');
-            return socket.emit('error', 'Access denied');
-        }
+        if (!group || !room) throw new Error('Группа или комната не найдены');
+        if (room.group.toString() !== groupCode) throw new Error('Комната не принадлежит группе');
+        if (!group.participants.includes(user._id)) throw new Error('Доступ запрещен');
 
         socket.join(roomCode);
-        console.log(`[Server] User joined: ${socket.request.user.username} to room ${room.name}`);
+        console.log(`[${user.username}] присоединился к комнате ${room.name}`);
 
-        // Отправляем подтверждение
-        socket.emit('roomJoined', {
-            roomId: room._id,
-            roomName: room.name
-        });
+        // Инициируем звонок для всех участников комнаты
+        initCall(roomCode);
+        
+        callback({ success: true });
 
     } catch (error) {
-        console.error('[Server] JoinRoom error:', error);
-        socket.emit('error', 'Server error');
+        console.error('Ошибка присоединения:', error);
+        callback({ success: false, error: error.message });
     }
   });
 
   socket.on('signal', (data) => {
-      socket.to(data.room).emit('signal', data);
+    console.log('Получен сигнал:', data.type);
+    socket.to(data.room).emit('signal', data);
   });
 
-  socket.on('getRooms', async (groupCode) => {
+  socket.on('getRooms', async (groupId) => {
     try {
-      // Проверяем валидность ID
-      if (!mongoose.Types.ObjectId.isValid(groupCode)) {
-        return socket.emit('error', 'Invalid group ID');
-      }
-  
-      const rooms = await Room.find({ group: groupCode })
-        .lean()
-        .exec();
-      
-      socket.emit('roomsList', rooms.map(r => ({
-        id: r._id.toString(),
-        name: r.name
-      })));
-    } 
-    catch (error) {
-      console.error('Error fetching rooms:', error);
+        const rooms = await Room.find({ group: groupId });
+        socket.emit('roomsList', rooms.map(r => ({
+            id: r._id.toString(),
+            name: r.name
+        })));
+    } catch (error) {
+        console.error('Error fetching rooms:', error);
     }
   });
 
