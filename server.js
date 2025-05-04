@@ -99,6 +99,11 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use((req, res, next) => {
+  console.log('Incoming cookies:', req.cookies);
+  next();
+});
+
 // Стратегия аутентификации
 passport.use(new LocalStrategy(
   {
@@ -120,12 +125,21 @@ passport.use(new LocalStrategy(
   }
 ));
 
-passport.serializeUser((user, done) => done(null, user.id));
+passport.serializeUser((user, done) => {
+  console.log('Serializing user:', user._id); // Логируем
+  done(null, user._id);
+});
 passport.deserializeUser(async (id, done) => {
   try {
+    console.log('Deserializing user ID:', id); // Логируем
     const user = await User.findById(id);
+    if (!user) {
+      console.log('User not found');
+      return done(null, false);
+    }
     done(null, user);
   } catch (err) {
+    console.error('Deserialize error:', err);
     done(err);
   }
 });
@@ -154,17 +168,24 @@ app.get('/login', (req, res) => {
 
 app.post('/login', (req, res, next) => {
   passport.authenticate('local', (err, user, info) => {
-    console.log('Auth error:', err); // Логируем ошибки
-    console.log('User:', user); // Проверяем найденного пользователя
-    console.log('Info:', info); // Доп. информация
+    console.log('--- Auth Callback ---');
+    console.log('Error:', err);
+    console.log('User:', user);
+    console.log('Info:', info);
+    console.log('Session ID:', req.sessionID);
+    console.log('Session:', req.session);
 
     if (err) return next(err);
     if (!user) {
-      req.flash('error', info.message);
+      req.flash('error', info?.message || 'Invalid credentials');
       return res.redirect('/login');
     }
-    req.logIn(user, (err) => {
-      if (err) return next(err);
+
+    req.logIn(user, (loginErr) => {
+      console.log('Login process:', loginErr || 'Success');
+      if (loginErr) return next(loginErr);
+      
+      console.log('Authenticated:', req.isAuthenticated());
       return res.redirect('/dashboard');
     });
   })(req, res, next);
