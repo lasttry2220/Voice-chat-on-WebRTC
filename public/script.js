@@ -21,6 +21,10 @@ if (!modal) console.error('Modal element not found!');
 if (!createGroupBtn) console.error('Create group button not found!');
 if (!serverNameInput) console.error('Server name input not found!');
 
+function getCSRFToken() {
+    return document.querySelector('meta[name="csrf-token"]').content;
+}
+
 // Обработчики закрытия модального окна
 document.querySelector('.modal-overlay').addEventListener('click', closeModal);
 document.querySelector('.back-button').addEventListener('click', closeModal);
@@ -70,24 +74,36 @@ function closeModal() {
 }
 
 
+socket.on('error', (error) => {
+    console.error('Socket error:', error);
+    if (error === 'Unauthorized') {
+      window.location.href = '/login';
+    }
+  });
+
+
 let localStream;
 let peerConnection;
 let isCallActive = false;
 
 const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-fetch('/api/login', {
+fetch('/api/data', {
     credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
-      'X-CSRF-Token': getCSRFToken() // Если используете CSRF
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': getCSRFToken()
     }
-  });
+});
 
 // const socket = io('https://192.168.1.20:3001');
 const socket = io('https://entryci.onrender.com', {
-    withCredentials: true
-  });
+    withCredentials: true,
+    transports: ['websocket'],
+    auth: {
+      csrfToken: getCSRFToken()
+    }
+});
 
 let currentSelectedGroupId = null;
 let currentGroup = '';

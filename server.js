@@ -38,30 +38,13 @@ app.set('views', path.join(__dirname, 'views'));
 
 // Middleware
 app.use(cors({
-  origin: function(origin, callback) {
-    const allowedOrigins = [
-      process.env.CLIENT_URL,
-      'http://localhost',
-      'http://localhost:3000',
-      'https://entryci.onrender.com'
-    ];
-    
-    // Разрешить запросы без origin (например, мобильные приложения)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.some(allowedOrigin => 
-      origin === allowedOrigin || 
-      origin.startsWith(allowedOrigin + ':') ||
-      origin.includes(allowedOrigin.replace('https://', '').replace('http://', ''))
-    )) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: [
+    'https://entryci.onrender.com', 
+    'http://localhost:3000'
+  ],
   credentials: true,
   exposedHeaders: ['_csrf', 'set-cookie'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-CSRF-Token']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token']
 }));
 
 // Дополнительные заголовки
@@ -89,20 +72,19 @@ app.get('*.(js|css|png|jpg|svg)', (req, res) => {
 
 // Настройка сессии
 const sessionMiddleware = session({
-  secret: process.env.SESSION_SECRET || 'strong-secret-key-here',
+  secret: process.env.SESSION_SECRET || 'strong-secret-key',
   resave: true,
   saveUninitialized: false,
   store: MongoStore.create({
     mongoUrl: process.env.MONGODB_URI,
-    ttl: 14 * 24 * 60 * 60,
-    autoRemove: 'native'
+    ttl: 14 * 24 * 60 * 60
   }),
   cookie: {
-    secure: true, // Всегда true для Render
+    secure: true, // Обязательно для HTTPS
     httpOnly: true,
-    sameSite: 'none', // Важно для кросс-доменных запросов
+    sameSite: 'none', // Критично для кросс-доменных запросов
     maxAge: 1000 * 60 * 60 * 24 * 14,
-    domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
+    domain: '.onrender.com' // Поддомен Render
   }
 });
 app.use(sessionMiddleware);
@@ -309,6 +291,14 @@ app.get('/api/groups/:id', async (req, res) => {
 });
 
 // Защищенные маршруты
+app.use((req, res, next) => {
+  console.log('Session Status:', {
+    id: req.sessionID,
+    authenticated: req.isAuthenticated(),
+    user: req.user
+  });
+  next();
+});
 
 // WebSocket
 // const httpServer = http.createServer(app);
