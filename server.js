@@ -90,19 +90,19 @@ app.get('*.(js|css|png|jpg|svg)', (req, res) => {
 // Настройка сессии
 const sessionMiddleware = session({
   secret: process.env.SESSION_SECRET || 'strong-secret-key-here',
-  resave: true, // Измените на true
+  resave: true,
   saveUninitialized: false,
   store: MongoStore.create({
     mongoUrl: process.env.MONGODB_URI,
     ttl: 14 * 24 * 60 * 60,
-    autoRemove: 'native' // Добавьте эту опцию
+    autoRemove: 'native'
   }),
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: true, // Всегда true для Render
     httpOnly: true,
-    sameSite: 'lax',
+    sameSite: 'none', // Важно для кросс-доменных запросов
     maxAge: 1000 * 60 * 60 * 24 * 14,
-    domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined // Критично для Render
+    domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
   }
 });
 app.use(sessionMiddleware);
@@ -331,15 +331,23 @@ const server = process.env.NODE_ENV === 'production'
       cert: fs.readFileSync(path.join(__dirname, 'certs', 'certificate.crt'))
     }, app);
 
-const io = socketIo(server, {
-  cors: {
-    origin: [
-      process.env.CLIENT_URL || 'http://localhost:3000',
-      'https://your-app.onrender.com' // Ваш URL на Render
-    ],
-    credentials: true
-  }
-});
+    const io = socketIo(server, {
+      cors: {
+        origin: [
+          process.env.CLIENT_URL,
+          'https://entryci.onrender.com',
+          'http://localhost:3000'
+        ],
+        credentials: true,
+        allowedHeaders: ['cookie', 'authorization']
+      },
+      allowEIO3: true // Фикс для совместимости
+    });
+    
+    io.engine.on("initial_headers", (headers) => {
+      headers["Access-Control-Allow-Origin"] = process.env.CLIENT_URL;
+      headers["Access-Control-Allow-Credentials"] = "true";
+    });
 
 // Интеграция аутентификации
 io.use((socket, next) => {
