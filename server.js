@@ -21,6 +21,18 @@ const User = require('./models/User');
 
 const app = express();
 
+
+// MongoClient
+const { MongoClient } = require('mongodb');
+
+// Создайте клиент MongoDB
+const clientPromise = MongoClient.connect(
+  process.env.MONGODB_URI || 'mongodb://localhost:27017/webrtc', 
+  { useUnifiedTopology: true }
+);
+
+
+
 // Получение групп с проверкой владельца
 const authenticate = (req, res, next) => {
   if (req.isAuthenticated()) {
@@ -43,8 +55,13 @@ app.use(cors({
     'http://localhost:3000'
   ],
   credentials: true,
-  exposedHeaders: ['set-cookie', 'x-csrf-token'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token']
+  exposedHeaders: ['set-cookie'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With',
+    'X-CSRF-Token'
+  ]
 }));
 
 // Дополнительные заголовки
@@ -79,20 +96,28 @@ const sessionMiddleware = session({
   saveUninitialized: false,
   proxy: true,
   store: MongoStore.create({
-    mongoUrl: process.env.MONGODB_URI,
-    ttl: 14 * 24 * 60 * 60,
+    clientPromise, // Используем промис клиента
+    dbName: 'webrtc-sessions', // Укажите имя БД для сессий
+    collectionName: 'sessions', // Название коллекции
+    ttl: 14 * 24 * 60 * 60, // 14 дней
     autoRemove: 'interval',
-    autoRemoveInterval: 10
+    autoRemoveInterval: 60 // Удаление устаревших каждые 60 минут
   }),
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    maxAge: 14 * 24 * 60 * 60 * 1000,
-    domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
+    maxAge: 14 * 24 * 60 * 60 * 1000
   }
 });
 app.use(sessionMiddleware);
+
+//логирование заголовков
+app.use((req, res, next) => {
+  console.log('Request headers:', req.headers);
+  console.log('Cookies:', req.headers.cookie);
+  next();
+});
 
 // Passport
 app.use(passport.initialize());
@@ -204,7 +229,7 @@ app.post('/login', (req, res, next) => {
             resolve();
           });
         });
-        return res.redirect('/dashboard');
+        return res.redirect('/dashboard').header('Cache-Control', 'no-cache, no-store');
       } catch (saveErr) {
         return next(saveErr);
       }
@@ -217,6 +242,17 @@ app.get('/register', (req, res) => {
     messages: req.flash(),
     csrfToken: req.csrfToken()
   });
+});
+
+
+app.use((req, res, next) => {
+  if (req.session && req.sessionID) {
+    console.log('Session exists:', {
+      id: req.sessionID,
+      expires: req.session.cookie.expires
+    });
+  }
+  next();
 });
 
 app.post('/register', async (req, res) => {
@@ -350,25 +386,42 @@ const server = process.env.NODE_ENV === 'production'
 
 // Интеграция аутентификации
 io.use((socket, next) => {
-    sessionMiddleware(socket.request, {}, next);
-  });
-  
-  io.use((socket, next) => {
-    const req = socket.request;
+  sessionMiddleware(socket.request, {}, async (err) => {
+    if (err) return next(err);
     
-    // Проверяем наличие пользователя в сессии
-    if (req.session && req.session.passport && req.session.passport.user) {
-      // Добавляем пользователя в объект запроса
-      User.findById(req.session.passport.user)
-        .then(user => {
-          req.user = user;
-          next();
-        })
-        .catch(err => next(new Error('Authentication error')));
-    } else {
-      next(new Error('Unauthorized'));
+    const req = socket.request;
+    if (!req.session.passport?.user) {
+      return next(new Error('Not authenticated'));
+    }
+    
+    try {
+      const user = await User.findById(req.session.passport.user);
+      if (!user) return next(new Error('User not found'));
+      
+      req.user = user;
+      next();
+    } catch (error) {
+      next(error);
     }
   });
+});
+  
+io.use((socket, next) => {
+  const req = socket.request;
+  
+  // Проверяем наличие пользователя в сессии
+  if (req.session && req.session.passport && req.session.passport.user) {
+    // Добавляем пользователя в объект запроса
+    User.findById(req.session.passport.user)
+      .then(user => {
+        req.user = user;
+        next();
+      })
+      .catch(err => next(new Error('Authentication error')));
+  } else {
+    next(new Error('Unauthorized'));
+  }
+});
 // Подключение к MongoDB
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/webrtc')
   .then(() => console.log('MongoDB connected'))
