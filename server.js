@@ -220,11 +220,13 @@ app.post('/login', (req, res, next) => {
         await new Promise((resolve, reject) => {
           req.session.save(err => {
             if (err) reject(err);
-            console.log('Session after save:', req.session); // Добавить логирование
+            console.log('Session after save:', req.session);
             resolve();
           });
         });
-        return res.redirect('/dashboard').header('Cache-Control', 'no-cache, no-store');
+        // Исправленная строка:
+        res.setHeader('Cache-Control', 'no-cache, no-store');
+        return res.redirect('/dashboard');
       } catch (saveErr) {
         return next(saveErr);
       }
@@ -380,13 +382,17 @@ const server = process.env.NODE_ENV === 'production'
     });
 
 // Интеграция аутентификации
+  
 io.use((socket, next) => {
+  const req = socket.request;
+
+
+
   sessionMiddleware(socket.request, {}, async (err) => {
     if (err) {
       console.error('Socket session error:', err);
       return next(new Error('Session error'));
     }
-    next();
     
     const req = socket.request;
     if (!req.session.passport?.user) {
@@ -398,15 +404,18 @@ io.use((socket, next) => {
       if (!user) return next(new Error('User not found'));
       
       req.user = user;
-      next();
+      next(); // Только один вызов next()
     } catch (error) {
       next(error);
     }
   });
-});
-  
-io.use((socket, next) => {
-  const req = socket.request;
+
+  app.use((err, req, res, next) => {
+    console.error(err.stack);
+    if (!res.headersSent) {
+      res.status(500).send('Внутренняя ошибка сервера');
+    }
+  });
   
   // Проверяем наличие пользователя в сессии
   if (req.session && req.session.passport && req.session.passport.user) {
@@ -422,7 +431,10 @@ io.use((socket, next) => {
   }
 });
 // Подключение к MongoDB
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/webrtc')
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/webrtc', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB error:', err));
 
