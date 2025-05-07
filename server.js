@@ -55,13 +55,8 @@ app.use(cors({
     'http://localhost:3000'
   ],
   credentials: true,
-  exposedHeaders: ['set-cookie'],
-  allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
-    'X-Requested-With',
-    'X-CSRF-Token'
-  ]
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'],
+  exposedHeaders: ['set-cookie']
 }));
 
 // Дополнительные заголовки
@@ -387,7 +382,11 @@ const server = process.env.NODE_ENV === 'production'
 // Интеграция аутентификации
 io.use((socket, next) => {
   sessionMiddleware(socket.request, {}, async (err) => {
-    if (err) return next(err);
+    if (err) {
+      console.error('Socket session error:', err);
+      return next(new Error('Session error'));
+    }
+    next();
     
     const req = socket.request;
     if (!req.session.passport?.user) {
