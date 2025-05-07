@@ -43,7 +43,13 @@ app.use(cors({
     'http://localhost:3000'
   ],
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-CSRF-Token',
+    'X-Requested-With'
+  ],
   exposedHeaders: ['set-cookie']
 }));
 
@@ -80,11 +86,11 @@ const sessionMiddleware = session({
   proxy: true,
   store: MongoStore.create({
     mongoUrl: process.env.MONGODB_URI,
-    dbName: 'webrtc-sessions', // Укажите имя БД для сессий
-    collectionName: 'sessions', // Название коллекции
-    ttl: 14 * 24 * 60 * 60, // 14 дней
+    dbName: 'webrtc-sessions',
+    collectionName: 'sessions',
+    ttl: 14 * 24 * 60 * 60,
     autoRemove: 'interval',
-    autoRemoveInterval: 60 // Удаление устаревших каждые 60 минут
+    autoRemoveInterval: 60
   }),
   cookie: {
     secure: process.env.NODE_ENV === 'production',
@@ -179,9 +185,15 @@ passport.deserializeUser(async (id, done) => {
 // Маршруты
 // обработчик dashboard
 app.get('/dashboard', authenticate, (req, res) => {
-  res.set('Cache-Control', 'no-store, max-age=0');
-  res.render('index', { 
-    csrfToken: req.csrfToken() // Передаем токен в шаблон
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  });
+  
+  res.render('index', {
+    csrfToken: req.csrfToken(),
+    user: req.user.username
   });
 });
 
@@ -205,7 +217,7 @@ app.post('/login', (req, res, next) => {
     if (!user) {
       await new Promise(resolve => req.session.destroy(resolve));
       res.clearCookie('connect.sid');
-      return res.redirect('/login');
+      return res.redirect('/login?error=invalid_credentials');
     }
 
     req.logIn(user, async (err) => {
@@ -214,18 +226,37 @@ app.post('/login', (req, res, next) => {
       try {
         await new Promise((resolve, reject) => {
           req.session.save(err => {
-            if (err) reject(err);
-            console.log('Session after save:', req.session);
+            if (err) {
+              console.error('Session save error:', err);
+              return reject(err);
+            }
             resolve();
           });
         });
-        res.set('Cache-Control', 'no-cache, no-store');
+
+        // Явно установите куки в ответе
+        res.cookie('connect.sid', req.sessionID, {
+          maxAge: 14 * 24 * 60 * 60 * 1000,
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+        });
+
         return res.redirect('/dashboard');
       } catch (saveErr) {
         return next(saveErr);
       }
     });
   })(req, res, next);
+});
+
+app.use((req, res, next) => {
+  console.log('Current session:', {
+    authenticated: req.isAuthenticated(),
+    user: req.user ? req.user._id : 'guest',
+    sessionId: req.sessionID
+  });
+  next();
 });
 
 app.get('/register', (req, res) => {
