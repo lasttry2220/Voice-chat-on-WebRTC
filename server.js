@@ -81,9 +81,9 @@ const sessionMiddleware = session({
     autoRemoveInterval: 10
   }),
   cookie: {
-    secure: true,
+    secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    sameSite: 'none',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     maxAge: 14 * 24 * 60 * 60 * 1000,
     domain: '.onrender.com'
   }
@@ -181,13 +181,6 @@ app.get('/login', (req, res) => {
 
 app.post('/login', (req, res, next) => {
   passport.authenticate('local', async (err, user, info) => {
-    console.log('--- Auth Callback ---');
-    console.log('Error:', err);
-    console.log('User:', user);
-    console.log('Info:', info);
-    console.log('Session ID:', req.sessionID);
-    console.log('Session:', req.session);
-
     if (err) return next(err);
 
     if (!user) {
@@ -199,10 +192,15 @@ app.post('/login', (req, res, next) => {
     req.logIn(user, async (err) => {
       if (err) return next(err);
       
-      // Фиксация сессии перед отправкой ответа
-      Promise(resolve => req.session.save(resolve));
-      
-      return res.redirect('/dashboard');
+      try {
+        // Фиксация сессии перед отправкой ответа
+        await new Promise((resolve, reject) => {
+          req.session.save(err => err ? reject(err) : resolve());
+        });
+        return res.redirect('/dashboard');
+      } catch (saveErr) {
+        return next(saveErr);
+      }
     });
   })(req, res, next);
 });
