@@ -43,7 +43,8 @@ app.use(cors({
     'http://localhost:3000'
   ],
   credentials: true,
-  exposedHeaders: ['set-cookie', 'x-csrf-token']
+  exposedHeaders: ['set-cookie', 'x-csrf-token'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token']
 }));
 
 // Дополнительные заголовки
@@ -63,6 +64,8 @@ app.use(express.static(path.join(__dirname, 'public'), {
   }
 }));
 
+app.set('trust proxy', 1);
+
 app.get('*.(js|css|png|jpg|svg)', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', req.path));
 });
@@ -72,8 +75,9 @@ app.get('*.(js|css|png|jpg|svg)', (req, res) => {
 // Настройка сессии
 const sessionMiddleware = session({
   secret: process.env.SESSION_SECRET || 'your-secret',
-  resave: true,
+  resave: false,
   saveUninitialized: false,
+  proxy: true,
   store: MongoStore.create({
     mongoUrl: process.env.MONGODB_URI,
     ttl: 14 * 24 * 60 * 60,
@@ -85,7 +89,7 @@ const sessionMiddleware = session({
     httpOnly: true,
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     maxAge: 14 * 24 * 60 * 60 * 1000,
-    domain: '.onrender.com'
+    domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
   }
 });
 app.use(sessionMiddleware);
@@ -193,9 +197,12 @@ app.post('/login', (req, res, next) => {
       if (err) return next(err);
       
       try {
-        // Фиксация сессии перед отправкой ответа
         await new Promise((resolve, reject) => {
-          req.session.save(err => err ? reject(err) : resolve());
+          req.session.save(err => {
+            if (err) reject(err);
+            console.log('Session after save:', req.session); // Добавить логирование
+            resolve();
+          });
         });
         return res.redirect('/dashboard');
       } catch (saveErr) {
