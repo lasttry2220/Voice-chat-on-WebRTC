@@ -21,18 +21,6 @@ const User = require('./models/User');
 
 const app = express();
 
-
-// MongoClient
-const { MongoClient } = require('mongodb');
-
-// Создайте клиент MongoDB
-const clientPromise = MongoClient.connect(
-  process.env.MONGODB_URI || 'mongodb://localhost:27017/webrtc', 
-  { useUnifiedTopology: true }
-);
-
-
-
 // Получение групп с проверкой владельца
 const authenticate = (req, res, next) => {
   if (req.isAuthenticated()) {
@@ -91,7 +79,7 @@ const sessionMiddleware = session({
   saveUninitialized: false,
   proxy: true,
   store: MongoStore.create({
-    clientPromise, // Используем промис клиента
+    mongoUrl: process.env.MONGODB_URI,
     dbName: 'webrtc-sessions', // Укажите имя БД для сессий
     collectionName: 'sessions', // Название коллекции
     ttl: 14 * 24 * 60 * 60, // 14 дней
@@ -106,6 +94,13 @@ const sessionMiddleware = session({
   }
 });
 app.use(sessionMiddleware);
+
+app.get('/healthcheck', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  });
+});
 
 //логирование заголовков
 app.use((req, res, next) => {
@@ -224,8 +219,7 @@ app.post('/login', (req, res, next) => {
             resolve();
           });
         });
-        // Исправленная строка:
-        res.setHeader('Cache-Control', 'no-cache, no-store');
+        res.set('Cache-Control', 'no-cache, no-store');
         return res.redirect('/dashboard');
       } catch (saveErr) {
         return next(saveErr);
@@ -384,10 +378,6 @@ const server = process.env.NODE_ENV === 'production'
 // Интеграция аутентификации
   
 io.use((socket, next) => {
-  const req = socket.request;
-
-
-
   sessionMiddleware(socket.request, {}, async (err) => {
     if (err) {
       console.error('Socket session error:', err);
@@ -395,48 +385,25 @@ io.use((socket, next) => {
     }
     
     const req = socket.request;
-    if (!req.session.passport?.user) {
-      return next(new Error('Not authenticated'));
-    }
-    
     try {
+      if (!req.session.passport?.user) {
+        return next(new Error('Not authenticated'));
+      }
+      
       const user = await User.findById(req.session.passport.user);
       if (!user) return next(new Error('User not found'));
       
       req.user = user;
-      next(); // Только один вызов next()
+      next();
     } catch (error) {
       next(error);
     }
   });
-
-  app.use((err, req, res, next) => {
-    console.error(err.stack);
-    if (!res.headersSent) {
-      res.status(500).send('Внутренняя ошибка сервера');
-    }
-  });
-  
-  // Проверяем наличие пользователя в сессии
-  if (req.session && req.session.passport && req.session.passport.user) {
-    // Добавляем пользователя в объект запроса
-    User.findById(req.session.passport.user)
-      .then(user => {
-        req.user = user;
-        next();
-      })
-      .catch(err => next(new Error('Authentication error')));
-  } else {
-    next(new Error('Unauthorized'));
-  }
 });
 // Подключение к MongoDB
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/webrtc', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/webrtc')
   .then(() => console.log('MongoDB connected'))
-  .catch(err => console.error('MongoDB error:', err));
+  .catch(err => console.error('MongoDB connection error:', err));
 
 // WebSocket логика
 io.on('connection', (socket) => {
