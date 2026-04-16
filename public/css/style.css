@@ -1,0 +1,197 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #1e1f22;
+    color: #dbdee1;
+    height: 100vh;
+    overflow: hidden;
+  }
+  
+  .app {
+    display: flex;
+    height: 100vh;
+  }
+  
+  /* Левая панель (группы и каналы) */
+  .sidebar {
+    width: 260px;
+    background: #2b2d31;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #1e1f22;
+  }
+  
+  .groups-section, .channels-section {
+    padding: 12px;
+  }
+  
+  .groups-section h3, .channels-section h3 {
+    font-size: 14px;
+    text-transform: uppercase;
+    color: #949ba4;
+    margin-bottom: 10px;
+  }
+  
+  #groups-list, #channels-list {
+    margin-bottom: 16px;
+  }
+  
+  .group-item, .channel-item {
+    padding: 8px 10px;
+    margin: 2px 0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  
+  .group-item:hover, .channel-item:hover {
+    background: #3b3f48;
+  }
+  
+  .group-item.active, .channel-item.active {
+    background: #404249;
+  }
+  
+  button {
+    background: #248046;
+    border: none;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    margin: 4px 0;
+    width: 100%;
+  }
+  
+  button:hover {
+    background: #2c9652;
+  }
+  
+  .join-group {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  
+  .join-group input {
+    flex: 1;
+    background: #1e1f22;
+    border: 1px solid #3b3f48;
+    color: white;
+    border-radius: 6px;
+    padding: 6px;
+  }
+  
+  /* Правая панель (участники) */
+  .members-panel {
+    width: 240px;
+    background: #2b2d31;
+    border-left: 1px solid #1e1f22;
+    padding: 12px;
+  }
+  
+  .members-panel h3 {
+    font-size: 14px;
+    text-transform: uppercase;
+    color: #949ba4;
+    margin-bottom: 12px;
+  }
+  
+  #online-members-list {
+    list-style: none;
+  }
+  
+  #online-members-list li {
+    padding: 6px 0;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .online-indicator {
+    width: 10px;
+    height: 10px;
+    background: #23a55a;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  
+  /* Центральная область */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: #1e1f22;
+  }
+  
+  .voice-panel {
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  
+  #channel-name {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 16px;
+  }
+  
+  #mute-btn {
+    width: auto;
+    padding: 8px 20px;
+    background: #da373c;
+  }
+  
+  #mute-btn.muted {
+    background: #248046;
+  }
+  
+  #voice-status {
+    font-size: 14px;
+    color: #949ba4;
+  }
+  
+  /* Модальные окна */
+  .modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.7);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+  
+  .modal-content {
+    background: #2b2d31;
+    padding: 20px;
+    border-radius: 12px;
+    width: 300px;
+  }
+  
+  .modal-content input {
+    width: 100%;
+    padding: 8px;
+    margin: 10px 0;
+    background: #1e1f22;
+    border: 1px solid #3b3f48;
+    color: white;
+    border-radius: 6px;
+  }
+  
+  .modal-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
