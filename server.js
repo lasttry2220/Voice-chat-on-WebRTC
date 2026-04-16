@@ -44,7 +44,7 @@ if (process.env.USE_HTTPS === 'true') {
       cert: fs.readFileSync('./ssl/cert.pem')
     };
     server = https.createServer(sslOptions, app);
-    console.log('✅ HTTPS server started');
+    console.log(' HTTPS server started');
   } catch (err) {
     console.error('SSL error:', err.message);
     server = http.createServer(app);
@@ -77,7 +77,7 @@ io.use((socket, next) => {
   if (session && session.userId) {
     socket.userId = session.userId;
     socket.username = session.username;
-    console.log(`✅ Socket authenticated: ${socket.username}`);
+    console.log(` Socket authenticated: ${socket.username}`);
     next();
   } else {
     console.error('❌ Socket unauthorized - no session');
@@ -346,8 +346,8 @@ io.on('connection', (socket) => {
       });
       await message.save();
 
-      console.log(`📤 Sending message to channel ${channelId}`);
-      console.log(`📤 Room name: channel:${channelId}`);
+      console.log(` Sending message to channel ${channelId}`);
+      console.log(` Room name: channel:${channelId}`);
       
       // Отправляем сообщение всем в комнате канала
       io.to(`channel:${channelId}`).emit('new-message', {
@@ -359,7 +359,7 @@ io.on('connection', (socket) => {
         createdAt: message.createdAt
       });
 
-      console.log('✅ Message sent to room');
+      console.log('!!! Message sent to room');
     } catch (err) {
       console.error('Error sending message:', err);
     }

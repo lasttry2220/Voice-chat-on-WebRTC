@@ -43,15 +43,15 @@
     const checkSocket = setInterval(() => {
       if (window.socket) {
         clearInterval(checkSocket);
-        console.log('✅ Setting up new-message listener');
+        console.log(' Setting up new-message listener');
         
         window.socket.on('new-message', (message) => {
-          console.log('🔔 NEW MESSAGE RECEIVED:', message);
-          console.log('📌 currentTextChannelId:', currentTextChannelId);
-          console.log('📌 message.channelId:', message.channelId);
+          console.log(' NEW MESSAGE RECEIVED:', message);
+          console.log(' currentTextChannelId:', currentTextChannelId);
+          console.log(' message.channelId:', message.channelId);
           
           if (currentTextChannelId === message.channelId) {
-            console.log('✅ Adding message to chat');
+            console.log(' Adding message to chat');
             currentChatMessages.push(message);
             displayMessages();
             
@@ -61,7 +61,7 @@
               messagesContainer.scrollTop = messagesContainer.scrollHeight;
             }
           } else {
-            console.log('❌ Message for different channel, ignoring');
+            console.log(' Message for different channel, ignoring');
           }
         });
       }
@@ -88,7 +88,7 @@
       if (isOwner) {
         const crown = document.createElement('div');
         crown.className = 'server-owner-badge';
-        crown.textContent = '👑';
+        crown.textContent = '';
         serverDiv.appendChild(crown);
       }
       
@@ -481,9 +481,9 @@
 
   // Текстовый чат
   function renderChat(channel) {
-    console.log('📢 renderChat called for channel:', channel._id);
+    console.log(' renderChat called for channel:', channel._id);
     currentTextChannelId = channel._id;
-    console.log('✅ currentTextChannelId set to:', currentTextChannelId);
+    console.log(' currentTextChannelId set to:', currentTextChannelId);
     
     const mainArea = document.querySelector('.main-area');
     if (!mainArea) return;
@@ -599,12 +599,12 @@
   //   window.voiceUsersList = document.getElementById('voice-users-list');
   // }
   function updateGroupMembersList(members) {
-    console.log('🎨 Updating group members UI:', members);
+    console.log(' Updating group members UI:', members);
     const membersList = document.getElementById('members-list');
     const membersCount = document.getElementById('members-count');
     
     if (!membersList) {
-      console.log('❌ members-list element not found');
+      console.log(' members-list element not found');
       return;
     }
     
@@ -636,14 +636,14 @@
     const checkSocket = setInterval(() => {
       if (window.socket) {
         clearInterval(checkSocket);
-        console.log('✅ Setting up group-members-update listener');
+        console.log(' Setting up group-members-update listener');
         
         window.socket.on('group-members-update', (members) => {
-          console.log('📡 Group members update received:', members);
+          console.log(' Group members update received:', members);
           if (window.updateGroupMembers) {
             window.updateGroupMembers(members);
           } else {
-            console.log('⚠️ window.updateGroupMembers not found, calling directly');
+            console.log(' window.updateGroupMembers not found, calling directly');
             updateGroupMembersList(members);
           }
         });

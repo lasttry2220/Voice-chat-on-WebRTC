@@ -52,7 +52,7 @@
       if (isOwner) {
         const crown = document.createElement('div');
         crown.className = 'server-owner-badge';
-        crown.textContent = '👑';
+        crown.textContent = '';
         serverDiv.appendChild(crown);
       }
       
